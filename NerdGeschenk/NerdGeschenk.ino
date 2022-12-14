@@ -2,17 +2,16 @@
 #include <Ds1302.h>
 #include <tinyNeoPixel.h>  //F_CPU muss >7.37Mhz sein
 
-#define NP_PIN 0
-#define BTN_PIN 2  //2.5v nominal, 5v mode, 0v set
+#define NP_PIN 0           //neopixel pin
+#define BTN_PIN 2          //analog. 2.5v nominal, 5v mode, 0v set
+#define DEBOUNCE_DELAY 50  //zeit in millisekunden fuer die ein weiterer knopfdruck ignoriert wird
 
 //EN,CLK,DAT
 Ds1302 rtc(1, 3, 4);
 tinyNeoPixel leds = tinyNeoPixel(7, NP_PIN, NEO_GRB + NEO_KHZ800);
 
-Ds1302::DateTime dt;  //sollte kostant pro loop sein und so oft genutzt das es keinunterschied macht
+Ds1302::DateTime dt;  //sollte kostant pro loop sein und so oft genutzt das es kein unterschied macht
 
-//color ist 0bIIRRGGBB
-//I ist helligkeit aber im augenblick ignoriert
 void led_wr_byte(byte led_byte, uint32_t color) {
   for (uint8_t i = 0; i < 7; i++) {
     if ((led_byte >> i) && 0x01) {
@@ -25,10 +24,14 @@ void led_wr_byte(byte led_byte, uint32_t color) {
 }
 
 //ganzes byte in farbe schreiben
-void led_wr_color_byte(uint32_t colors[7]) {
+void led_wr_color_byte(/*std::initializer_list<uint32_t>&*/ uint32_t* colors) {
   for (uint8_t i = 0; i < 7; i++) {
     leds.setPixelColor(i, colors[i]);
   }
+}
+
+uint32_t seasonal_color(uint8_t& month) {
+  return 0xFFFFFFFF;
 }
 
 void setup() {
@@ -61,13 +64,14 @@ void setup() {
 
     case Ds1302::MONTH_JUN:
       {  //pride month
-        led_wr_color_byte({ leds.Color(255, 0, 0),
-                            leds.Color(255, 128, 0),
-                            leds.Color(255, 255, 0),
-                            leds.Color(0, 255, 0),
-                            leds.Color(0, 192, 255),
-                            leds.Color(0, 0, 255),
-                            leds.Color(192, 0, 255) });
+        uint32_t pride_flag[7] = { leds.Color(255, 0, 0),
+                                   leds.Color(255, 128, 0),
+                                   leds.Color(255, 255, 0),
+                                   leds.Color(0, 255, 0),
+                                   leds.Color(0, 192, 255),
+                                   leds.Color(0, 0, 255),
+                                   leds.Color(192, 0, 255) };
+        led_wr_color_byte(pride_flag);  //keine STL, keine einfache moeglichkeit das direkt als initializer list zu passen
         leds.show();
         delay(3000);
       }
@@ -139,14 +143,29 @@ void display_page() {
   leds.show();
 }
 
-uint8_t button_val() {  //2 mode, 1 set, 0 keiner
+uint8_t read_button_val() {  //2 mode, 1 set, 0 keiner
   uint16_t adc_read = analogRead(BTN_PIN);
-  if (adc_read < 256) return 2;
-  else if (adc_read > 768) return 1;
+  if (adc_read < 256) return 2;       //spannung nahe 0V
+  else if (adc_read > 768) return 1;  //spannung nahe 5V
   return 0;
 }
 
+uint8_t last_button_val = 0;
+auto last_button_millis = millis();
 void poll_buttons() {
+  uint8_t button_val = read_button_val();
+
+  if ((button_val != last_button_val) and (millis() - last_button_millis > DEBOUNCE_DELAY)) {
+    if (button_val != 0) last_button_millis = millis();  //loslassen ignorieren
+
+    switch (button_val) {
+      case 1:
+        break;
+
+      case 2:
+        break;
+    }
+  }
 }
 
 void loop() {
