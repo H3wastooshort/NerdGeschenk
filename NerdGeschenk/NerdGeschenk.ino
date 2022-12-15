@@ -126,7 +126,15 @@ void setup() {
       leds.setPixelColor(i, (i + 1) * 36 /* 7->252 */, 0, 0);
     }
     leds.show();
-    while (true) delay(1000);
+    dt.year = 22;
+    dt.month = 1;
+    dt.dow = 7;
+    dt.day = 1;
+    dt.hour = 0;
+    dt.minute = 0;
+    dt.second = 0;
+    rtc.setDateTime(&dt);
+    delay(1000);
   }
   rtc.getDateTime(&dt);
 
@@ -142,16 +150,16 @@ enum time_page_e {
   PAGE_SEC        //gelb
 };
 uint8_t time_page = PAGE_YEAR;
-bool edit_mode = false;
+uint8_t edit_mode = 0;  //0 keine bearbeitung, 1 hinzufuegen, 2 abziehen
 
 auto last_disp_change = millis();
 void display_page() {
   if (millis() > last_disp_change - 5000) {
-    if (!edit_mode) time_page++;
+    if (edit_mode == 0) time_page++;
     if (time_page > PAGE_SEC) time_page = PAGE_YEAR;
   }
 
-  bool edit_blink = edit_mode and (millis() % 1024 >= 512);
+  bool edit_blink = (edit_mode > 0) and (millis() % 1024 >= 512);
   switch (time_page) {
     case PAGE_YEAR:  //rot
       led_wr_byte(dt.year, edit_blink ? 0xFFFFFFFF : leds.Color(255, 0, 0));
@@ -194,26 +202,32 @@ void poll_buttons() {
 
     switch (last_button_val) {
       case 1:
-        if (edit_mode) {
-          switch (time_page) {
+        if (edit_mode > 0) {
+          switch (time_page) {  //kein <0 test noetig, unter 0 wird 255 was bei allen zu hoch ist
             case PAGE_YEAR:
-              dt.year++;
+              dt.year += (edit_mode == 1) ? 1 : -1;
               break;
             case PAGE_MON:
-              dt.month++;
+              dt.month += (edit_mode == 1) ? 1 : -1;
               if (dt.month > 12) dt.month = 0;
               break;
             case PAGE_DAY:
-              if (dt.month > 31) dt.month = 0;
+              dt.day += (edit_mode == 1) ? 1 : -1;
+              dt.dow += (edit_mode == 1) ? 1 : -1;
+              dt.dow %= 7;
+              if (dt.day > 31) dt.day = 0;
               break;
             case PAGE_HOUR:
-              if (dt.month > 24) dt.month = 0;
+              dt.hour += (edit_mode == 1) ? 1 : -1;
+              if (dt.hour > 24) dt.hour = 0;
               break;
             case PAGE_MIN:
-              if (dt.month > 60) dt.month = 0;
+              dt.minute += (edit_mode == 1) ? 1 : -1;
+              if (dt.minute > 60) dt.minute = 0;
               break;
             case PAGE_SEC:
-              if (dt.month > 60) dt.month = 0;
+              dt.second += (edit_mode == 1) ? 10 : -10;
+              if (dt.second > 60) dt.second = 0;
               break;
           }
           rtc.setDateTime(&dt);
@@ -226,11 +240,42 @@ void poll_buttons() {
         break;
 
       case 2:
-        if (!edit_mode) {
-          edit_mode = true;
-          time_page = 0;
-        } else {
-          time_page++;
+        switch (edit_mode) {
+          default:
+          case 0:  //edit start
+            edit_mode = 1;
+            time_page = 0;
+            break;
+
+          case 1:  //edit wechsel auf abzug
+            edit_mode = 2;
+
+            //led abzug modus
+            led_clear();
+            leds.setPixelColor(3, 0, 255, 0);
+            delay(250);
+            break;
+
+          case 2:  //edit wechsel auf hinzu
+            time_page++;
+            edit_mode = 1;
+
+            if (time_page > PAGE_SEC) {  //edit verlassen wenn fertig
+              edit_mode = 0;
+              time_page = PAGE_YEAR;
+
+              //led anzeige edit verlassen
+              led_clear();
+              leds.setPixelColor(3, 0, 0, 255);
+              delay(250);
+              break;
+            }
+
+            //led hinzuf. modus
+            led_clear();
+            leds.setPixelColor(3, 255, 0, 0);
+            delay(250);
+            break;
         }
 
         break;
