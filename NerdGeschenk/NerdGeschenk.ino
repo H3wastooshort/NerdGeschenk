@@ -1,6 +1,7 @@
 //kompiliert mit ATtinyCore
 #include <Ds1302.h>               //https://github.com/Treboada/Ds1302
 #include <tinyNeoPixel_Static.h>  //F_CPU muss >7.37Mhz sein, in ATtinyCore inklusive
+#include "missing_funcs_tNP.h" //dies sind nur schnipsel von der megaTinyCore version der tinyNeoPoxel_Static lib die in ATTinyCore in der der .cpp datei fehlen aber in der .h enthalten sind. hoffentlich wird das gefixt, auszug der ColorHSV func aus https://github.com/SpenceKonde/megaTinyCore/blob/master/megaavr/libraries/tinyNeoPixel_Static/tinyNeoPixel_Static.cpp
 
 #define NP_PIN 0           //neopixel pin
 #define BTN_PIN 2          //analog. 2.5v nominal, 5v mode, 0v set
@@ -88,7 +89,7 @@ void led_run_daily_anim() {
               for (uint8_t i = 0; i <= j; i++) {
                 uint8_t brght = map(i, 0, 6, 0, 255);
                 uint16_t col = random(0, 0xFFFF);
-                //leds.setPixelColor(i, leds.ColorHSV(col, 255, brght));
+                leds.setPixelColor(i, leds.ColorHSV(col, 255, brght));
                 leds.show();
                 delay(50);
               }
