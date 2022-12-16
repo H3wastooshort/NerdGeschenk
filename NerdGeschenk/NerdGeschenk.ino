@@ -2,6 +2,7 @@
 #include <Ds1302.h>               //https://github.com/Treboada/Ds1302
 #include <tinyNeoPixel_Static.h>  //F_CPU muss >7.37Mhz sein, in ATtinyCore inklusive
 #include "missing_funcs_tNP.h" //dies sind nur schnipsel von der megaTinyCore version der tinyNeoPoxel_Static lib die in ATTinyCore in der der .cpp datei fehlen aber in der .h enthalten sind. hoffentlich wird das gefixt, auszug der ColorHSV func aus https://github.com/SpenceKonde/megaTinyCore/blob/master/megaavr/libraries/tinyNeoPixel_Static/tinyNeoPixel_Static.cpp
+#include <avr/wdt.h>
 
 #define NP_PIN 0           //neopixel pin
 #define BTN_PIN 2          //analog. 2.5v nominal, 5v mode, 0v set
@@ -13,6 +14,14 @@ byte pixels[7 * 3];
 tinyNeoPixel leds = tinyNeoPixel(7, NP_PIN, NEO_GRB + NEO_KHZ800, pixels);
 
 Ds1302::DateTime dt;  //sollte kostant pro loop sein und so oft genutzt das es kein unterschied macht
+
+void wdt_delay(uint32_t dt) {
+    auto start_millis = millis();
+    while (millis()-start_millis>dt) {
+      wdt_reset();
+      delay(1);
+    }
+}
 
 void led_wr_byte(byte led_byte, uint32_t color) {
   for (uint8_t i = 0; i < 7; i++) {
@@ -63,7 +72,7 @@ void led_run_daily_anim() {
           const char* xmas = "Merry XMAS!";
           for (uint8_t i = 0; i < strlen(xmas); i++) {
             led_wr_byte(xmas[i], leds.Color(255, 255, 255));
-            delay(1000);
+            wdt_delay(1000);
           }
           //musste ein paar mehr als die klasischen weihnachtsfarben nehemen
           uint32_t xmas_blink[] = {
@@ -81,7 +90,7 @@ void led_run_daily_anim() {
               leds.setPixelColor(i, xmas_blink[(i + xmas_blink_start) % 7]);  //von start starten und einmal im kreis falls noetig
             }
             xmas_blink_start %= 7;
-            delay(100);
+            wdt_delay(100);
           }
         } else if (dt.day == 31) {  //silvester
           for (uint8_t k = 0; k <= 5; k++) {
@@ -91,22 +100,22 @@ void led_run_daily_anim() {
                 uint16_t col = random(0, 0xFFFF);
                 leds.setPixelColor(i, leds.ColorHSV(col, 255, brght));
                 leds.show();
-                delay(50);
+                wdt_delay(50);
               }
             }
-            delay(50);
+            wdt_delay(50);
             for (uint8_t b = 1; b <= 4; b++) {
               for (uint8_t j = 0; j < 7; j++) {  //rakete explosion
                 for (int8_t i = j; i >= 0; i--) {
                   uint8_t brght = map(i, 0, 6, 0, b * 64);
                   leds.setPixelColor(i, brght, brght, brght);
                   leds.show();
-                  delay(10);
+                  wdt_delay(10);
                 }
               }
             }
             led_clear();
-            delay(50);
+            wdt_delay(50);
           }
         }
       }
@@ -125,7 +134,7 @@ void led_run_daily_anim() {
         };
         led_wr_color_byte(pride_flag);  //keine ordentliche STL, keine einfache moeglichkeit das direkt als initializer list zu passen
         leds.show();
-        delay(3000);
+        wdt_delay(3000);
       }
 
     case Ds1302::MONTH_MAR:
@@ -134,7 +143,7 @@ void led_run_daily_anim() {
           byte pi_b[] = { 3, 255, 1, 4 };
           for (uint8_t i = 0; i < sizeof(pi_b); i++) {
             led_wr_byte(pi_b[i], leds.Color(255, 0, 102));
-            delay(1000);
+            wdt_delay(1000);
           }
         }
       }
@@ -145,7 +154,7 @@ void led_run_daily_anim() {
           leds.setPixelColor(i, seasonal_color(dt.month));
           leds.setPixelColor(6 - i, seasonal_color(dt.month));
           leds.show();
-          delay(100);
+          wdt_delay(100);
         }
         break;
       }
@@ -154,6 +163,7 @@ void led_run_daily_anim() {
 }
 
 void setup() {
+  wdt_enable(WDTO_8S); //NICHTS sollte länger als 8S hängen, wdt_delay ruft immer wdt_reset() auf
   pinMode(NP_PIN, OUTPUT);
   leds.show();
 
@@ -173,7 +183,7 @@ void setup() {
     dt.minute = 0;
     dt.second = 0;
     rtc.setDateTime(&dt);
-    delay(1000);
+    wdt_delay(1000);
   }
   rtc.getDateTime(&dt);
 
@@ -297,7 +307,7 @@ void poll_buttons() {
             //led abzug modus
             led_clear();
             leds.setPixelColor(3, 0, 255, 0);
-            delay(250);
+            wdt_delay(250);
             break;
 
           case 2:  //edit wechsel auf hinzu
@@ -311,14 +321,14 @@ void poll_buttons() {
               //led anzeige edit verlassen
               led_clear();
               leds.setPixelColor(3, 0, 0, 255);
-              delay(250);
+              wdt_delay(250);
               break;
             }
 
             //led hinzuf. modus
             led_clear();
             leds.setPixelColor(3, 255, 0, 0);
-            delay(250);
+            wdt_delay(250);
             break;
         }
 
@@ -332,4 +342,5 @@ void loop() {
   rtc.getDateTime(&dt);
   poll_buttons();
   display_page();
+  wdt_reset();
 }
