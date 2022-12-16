@@ -1,6 +1,6 @@
 //kompiliert mit ATtinyCore
-#include <Ds1302.h>
-#include <tinyNeoPixel.h>  //F_CPU muss >7.37Mhz sein
+#include <Ds1302.h>               //https://github.com/Treboada/Ds1302
+#include <tinyNeoPixel_Static.h>  //F_CPU muss >7.37Mhz sein, in ATtinyCore inklusive
 
 #define NP_PIN 0           //neopixel pin
 #define BTN_PIN 2          //analog. 2.5v nominal, 5v mode, 0v set
@@ -8,7 +8,8 @@
 
 //EN,CLK,DAT
 Ds1302 rtc(1, 3, 4);
-tinyNeoPixel leds = tinyNeoPixel(7, NP_PIN, NEO_GRB + NEO_KHZ800);
+byte pixels[7 * 3];
+tinyNeoPixel leds = tinyNeoPixel(7, NP_PIN, NEO_GRB + NEO_KHZ800, pixels);
 
 Ds1302::DateTime dt;  //sollte kostant pro loop sein und so oft genutzt das es kein unterschied macht
 
@@ -35,8 +36,21 @@ void led_clear() {
   for (uint8_t i = 0; i < 7; i++) leds.setPixelColor(i, 0);
 }
 
-uint32_t seasonal_color(uint8_t& month) {
-  return 0xFFFFFFFF;
+uint32_t seasonal_color(uint8_t month) {  //saesionale farbe. sollte eigentlich std::map sein
+  switch (month) {                        //keine STL, kein std::map :(
+    case Ds1302::MONTH_JAN: return leds.Color(0, 255, 255);
+    case Ds1302::MONTH_FEB: return leds.Color(0, 255, 204);
+    case Ds1302::MONTH_MAR: return leds.Color(102, 255, 204);
+    case Ds1302::MONTH_APR: return leds.Color(0, 204, 0);
+    case Ds1302::MONTH_MAY: return leds.Color(102, 255, 51);
+    case Ds1302::MONTH_JUN: return leds.Color(204, 255, 102);
+    case Ds1302::MONTH_JUL: return leds.Color(255, 255, 0);
+    case Ds1302::MONTH_AUG: return leds.Color(255, 204, 0);
+    case Ds1302::MONTH_SET: return leds.Color(255, 153, 51);
+    case Ds1302::MONTH_OCT: return leds.Color(255, 102, 0);
+    case Ds1302::MONTH_NOV: return leds.Color(204, 51, 255);
+    case Ds1302::MONTH_DEC: return leds.Color(0, 0, 204);
+  }
 }
 
 void led_run_daily_anim() {
@@ -50,16 +64,36 @@ void led_run_daily_anim() {
             led_wr_byte(xmas[i], leds.Color(255, 255, 255));
             delay(1000);
           }
+          //musste ein paar mehr als die klasischen weihnachtsfarben nehemen
+          uint32_t xmas_blink[] = {
+            leds.Color(255, 0, 0),
+            leds.Color(255, 255, 0),
+            leds.Color(128, 255, 0),
+            leds.Color(255, 255, 0),
+            leds.Color(0, 0, 255),
+            leds.Color(255, 255, 255),
+            leds.Color(128, 0, 192)
+          };
+          uint8_t xmas_blink_start = 0;
+          for (uint8_t j = 0; j < 14; j++) {
+            for (uint8_t i = 0; i < 7; i++) {
+              leds.setPixelColor(i, xmas_blink[(i + xmas_blink_start) % 7]);  //von start starten und einmal im kreis falls noetig
+            }
+            xmas_blink_start %= 7;
+            delay(100);
+          }
         } else if (dt.day == 31) {  //silvester
-          for (uint8_t k = 0; k <= 3; k++) {
+          for (uint8_t k = 0; k <= 5; k++) {
             for (uint8_t j = 0; j < 7; j++) {  //rakete einfliegen
               for (uint8_t i = 0; i <= j; i++) {
                 uint8_t brght = map(i, 0, 6, 0, 255);
-                leds.setPixelColor(i, (k == 0) * brght, (k == 1) * brght, (k == 2) * brght);
+                uint16_t col = random(0, 0xFFFF);
+                //leds.setPixelColor(i, leds.ColorHSV(col, 255, brght));
                 leds.show();
                 delay(50);
               }
             }
+            delay(50);
             for (uint8_t b = 1; b <= 4; b++) {
               for (uint8_t j = 0; j < 7; j++) {  //rakete explosion
                 for (int8_t i = j; i >= 0; i--) {
@@ -71,20 +105,23 @@ void led_run_daily_anim() {
               }
             }
             led_clear();
+            delay(50);
           }
         }
       }
       break;
 
-    case Ds1302::MONTH_JUN:
-      {  //pride month
-        uint32_t pride_flag[7] = { leds.Color(255, 0, 0),
-                                   leds.Color(255, 128, 0),
-                                   leds.Color(255, 255, 0),
-                                   leds.Color(0, 255, 0),
-                                   leds.Color(0, 192, 255),
-                                   leds.Color(0, 0, 255),
-                                   leds.Color(192, 0, 255) };
+    case Ds1302::MONTH_JUN:  //pride month
+      {
+        uint32_t pride_flag[] = {
+          leds.Color(255, 0, 0),
+          leds.Color(255, 128, 0),
+          leds.Color(255, 255, 0),
+          leds.Color(0, 255, 0),
+          leds.Color(0, 192, 255),
+          leds.Color(0, 0, 255),
+          leds.Color(192, 0, 255)
+        };
         led_wr_color_byte(pride_flag);  //keine ordentliche STL, keine einfache moeglichkeit das direkt als initializer list zu passen
         leds.show();
         delay(3000);
@@ -95,7 +132,7 @@ void led_run_daily_anim() {
         if (dt.day == 14) {  //pi day
           byte pi_b[] = { 3, 255, 1, 4 };
           for (uint8_t i = 0; i < sizeof(pi_b); i++) {
-            led_wr_byte(pi_b[i], leds.Color(255, 255, 255));
+            led_wr_byte(pi_b[i], leds.Color(255, 0, 102));
             delay(1000);
           }
         }
@@ -116,7 +153,7 @@ void led_run_daily_anim() {
 }
 
 void setup() {
-  leds.begin();
+  pinMode(NP_PIN, OUTPUT);
   leds.show();
 
   //rtc setup
@@ -126,6 +163,7 @@ void setup() {
       leds.setPixelColor(i, (i + 1) * 36 /* 7->252 */, 0, 0);
     }
     leds.show();
+
     dt.year = 22;
     dt.month = 1;
     dt.dow = 7;
@@ -138,7 +176,7 @@ void setup() {
   }
   rtc.getDateTime(&dt);
 
-  led_run_daily_anim();
+  //led_run_daily_anim();
 }
 
 enum time_page_e {
@@ -152,8 +190,14 @@ enum time_page_e {
 uint8_t time_page = PAGE_YEAR;
 uint8_t edit_mode = 0;  //0 keine bearbeitung, 1 hinzufuegen, 2 abziehen
 
+uint8_t last_hour = 0;
 auto last_disp_change = millis();
 void display_page() {
+  if (dt.hour != last_hour) {
+    led_run_daily_anim();
+    last_hour = dt.hour;
+  }
+
   if (millis() > last_disp_change - 5000) {
     if (edit_mode == 0) time_page++;
     if (time_page > PAGE_SEC) time_page = PAGE_YEAR;
@@ -196,9 +240,7 @@ void poll_buttons() {
   uint8_t button_val = read_button_val();
 
   if ((button_val != last_button_val) and (millis() - last_button_millis > DEBOUNCE_DELAY)) {
-    if (button_val != 0) last_button_millis = millis();
-
-    //TODO: button reagiert auf loslassen, lange halten setzt feld zurueck
+    if (button_val == 0) last_button_millis = millis();
 
     switch (last_button_val) {
       case 1:
@@ -220,6 +262,7 @@ void poll_buttons() {
             case PAGE_HOUR:
               dt.hour += (edit_mode == 1) ? 1 : -1;
               if (dt.hour > 24) dt.hour = 0;
+              last_hour = dt.hour;
               break;
             case PAGE_MIN:
               dt.minute += (edit_mode == 1) ? 1 : -1;
