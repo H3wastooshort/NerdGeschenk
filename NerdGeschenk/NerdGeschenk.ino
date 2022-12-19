@@ -1,4 +1,4 @@
-//kompiliert mit ATtinyCore
+//kompiliert mit https://github.com/SpenceKonde/ATTinyCore
 #include <Ds1302.h>               //https://github.com/Treboada/Ds1302
 #include <tinyNeoPixel_Static.h>  //F_CPU muss >7.37Mhz sein, in ATtinyCore inklusive
 #include "missing_funcs_tNP.h"    //dies sind nur schnipsel von der megaTinyCore version der tinyNeoPoxel_Static lib die in ATTinyCore in der der .cpp datei fehlen aber in der .h enthalten sind. hoffentlich wird das gefixt. benutzt: auszug der ColorHSV func aus https://github.com/SpenceKonde/megaTinyCore/blob/master/megaavr/libraries/tinyNeoPixel_Static/tinyNeoPixel_Static.cpp
@@ -17,7 +17,7 @@ Ds1302::DateTime dt;  //sollte kostant pro loop sein und so oft genutzt das es k
 
 void wdt_delay(uint32_t dt) {
   auto start_millis = millis();
-  while (millis() - start_millis > dt) {
+  while (millis() - start_millis < dt) {
     wdt_reset();
     delay(1);
   }
@@ -48,6 +48,7 @@ void led_clear() {
 
 uint32_t seasonal_color(uint8_t month) {  //saesionale farbe. sollte eigentlich std::map sein
   switch (month) {                        //keine STL, kein std::map :(
+    default: return leds.Color(255, 128, 128);
     case Ds1302::MONTH_JAN: return leds.Color(0, 255, 255);
     case Ds1302::MONTH_FEB: return leds.Color(0, 255, 204);
     case Ds1302::MONTH_MAR: return leds.Color(102, 255, 204);
@@ -95,9 +96,9 @@ void led_run_daily_anim(uint8_t mon, uint8_t day) {
         } else if (day == 31) {  //silvester
           for (uint8_t k = 0; k <= 5; k++) {
             for (uint8_t j = 0; j < 7; j++) {  //rakete einfliegen
+              uint16_t col = random(0, 0xFFFF);
               for (uint8_t i = 0; i <= j; i++) {
-                uint8_t brght = map(i, 0, 6, 0, 255);
-                uint16_t col = random(0, 0xFFFF);
+                uint8_t brght = map(i, 0, 6, 16, 255);
                 leds.setPixelColor(i, leds.ColorHSV(col, 255, brght));
                 leds.show();
                 wdt_delay(50);
@@ -107,7 +108,7 @@ void led_run_daily_anim(uint8_t mon, uint8_t day) {
             for (uint8_t b = 1; b <= 4; b++) {
               for (uint8_t j = 0; j < 7; j++) {  //rakete explosion
                 for (int8_t i = j; i >= 0; i--) {
-                  uint8_t brght = map(i, 0, 6, 0, b * 64);
+                  uint8_t brght = map(i, 0, 6, 16, b * 64);
                   leds.setPixelColor(i, brght, brght, brght);
                   leds.show();
                   wdt_delay(10);
@@ -124,21 +125,21 @@ void led_run_daily_anim(uint8_t mon, uint8_t day) {
     case Ds1302::MONTH_JUN:  //pride month
       {
         uint32_t pride_flag[] = {
-          leds.Color(255, 0, 0),
-          leds.Color(255, 128, 0),
-          leds.Color(255, 255, 0),
-          leds.Color(0, 255, 0),
-          leds.Color(0, 192, 255),
+          leds.Color(192, 0, 255),
           leds.Color(0, 0, 255),
-          leds.Color(192, 0, 255)
+          leds.Color(0, 192, 255),
+          leds.Color(0, 255, 0),
+          leds.Color(255, 255, 0),
+          leds.Color(255, 128, 0),
+          leds.Color(255, 0, 0)
         };
         led_wr_color_byte(pride_flag);  //keine ordentliche STL, keine einfache moeglichkeit das direkt als initializer list zu passen
         leds.show();
         wdt_delay(3000);
       }
+      break;
 
-    case Ds1302::MONTH_MAR:
-      {
+        case Ds1302::MONTH_MAR : {
         if (day == 14) {  //pi day
           byte pi_b[] = { 3, 255, 1, 4 };
           for (uint8_t i = 0; i < sizeof(pi_b); i++) {
@@ -147,6 +148,7 @@ void led_run_daily_anim(uint8_t mon, uint8_t day) {
           }
         }
       }
+      break;
 
     default:
       {
@@ -197,7 +199,7 @@ void setup() {
   leds.show();
   wdt_delay(1000);
 
-  led_run_daily_anim(dt.month,dt.day);
+  //led_run_daily_anim(dt.month, dt.day);
 }
 
 enum time_page_e {
@@ -215,7 +217,7 @@ uint8_t last_hour = 0;
 uint32_t last_disp_change = 0;
 void display_page() {
   if (dt.hour != last_hour) {
-    led_run_daily_anim(dt.month,dt.day);
+    led_run_daily_anim(dt.month, dt.day);
     last_hour = dt.hour;
   }
 
@@ -273,26 +275,26 @@ void poll_buttons() {
               break;
             case PAGE_MON:
               dt.month += (edit_mode == 1) ? 1 : -1;
-              if (dt.month > 12) dt.month = 0;
+              if (dt.month > 12) dt.month = 1;
               break;
             case PAGE_DAY:
               dt.day += (edit_mode == 1) ? 1 : -1;
-              dt.dow += (edit_mode == 1) ? 1 : -1;
-              dt.dow %= 7;
-              if (dt.day > 31) dt.day = 0;
+              /*dt.dow += (edit_mode == 1) ? 1 : -1;
+              dt.dow %= 7;*/
+              if (dt.day > 31) dt.day = 1;
               break;
             case PAGE_HOUR:
               dt.hour += (edit_mode == 1) ? 1 : -1;
-              if (dt.hour > 24) dt.hour = 0;
+              if (dt.hour > 23) dt.hour = 0;              
               last_hour = dt.hour;
               break;
             case PAGE_MIN:
               dt.minute += (edit_mode == 1) ? 1 : -1;
-              if (dt.minute > 60) dt.minute = 0;
+              if (dt.minute > 59) dt.minute = 0;
               break;
             case PAGE_SEC:
               dt.second += (edit_mode == 1) ? 10 : -10;
-              if (dt.second > 60) dt.second = 0;
+              if (dt.second > 59) dt.second = 0;
               break;
           }
           rtc.setDateTime(&dt);
@@ -317,7 +319,7 @@ void poll_buttons() {
 
             //led abzug modus
             led_clear();
-            leds.setPixelColor(3, 0, 255, 0);
+            leds.setPixelColor(3, 255, 0, 0);
             leds.show();
             wdt_delay(1000);
             break;
@@ -340,7 +342,7 @@ void poll_buttons() {
 
             //led hinzuf. modus
             led_clear();
-            leds.setPixelColor(3, 255, 0, 0);
+            leds.setPixelColor(3, 0, 255, 0);
             leds.show();
             wdt_delay(1000);
             break;
