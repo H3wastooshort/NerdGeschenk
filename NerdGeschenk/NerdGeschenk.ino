@@ -1,31 +1,31 @@
 //kompiliert mit ATtinyCore
 #include <Ds1302.h>               //https://github.com/Treboada/Ds1302
 #include <tinyNeoPixel_Static.h>  //F_CPU muss >7.37Mhz sein, in ATtinyCore inklusive
-#include "missing_funcs_tNP.h" //dies sind nur schnipsel von der megaTinyCore version der tinyNeoPoxel_Static lib die in ATTinyCore in der der .cpp datei fehlen aber in der .h enthalten sind. hoffentlich wird das gefixt, auszug der ColorHSV func aus https://github.com/SpenceKonde/megaTinyCore/blob/master/megaavr/libraries/tinyNeoPixel_Static/tinyNeoPixel_Static.cpp
+#include "missing_funcs_tNP.h"    //dies sind nur schnipsel von der megaTinyCore version der tinyNeoPoxel_Static lib die in ATTinyCore in der der .cpp datei fehlen aber in der .h enthalten sind. hoffentlich wird das gefixt. benutzt: auszug der ColorHSV func aus https://github.com/SpenceKonde/megaTinyCore/blob/master/megaavr/libraries/tinyNeoPixel_Static/tinyNeoPixel_Static.cpp
 #include <avr/wdt.h>
 
 #define NP_PIN 0           //neopixel pin
-#define BTN_PIN 2          //analog. 2.5v nominal, 5v mode, 0v set
-#define DEBOUNCE_DELAY 50  //zeit in millisekunden fuer die ein weiterer knopfdruck ignoriert wird
+#define BTN_PIN A1         //analog. digital pin 2. 2.5v nominal, 5v mode, 0v set
+#define DEBOUNCE_DELAY 25  //zeit in millisekunden fuer die ein weiterer knopfdruck ignoriert wird
 
 //EN,CLK,DAT
 Ds1302 rtc(1, 3, 4);
 byte pixels[7 * 3];
-tinyNeoPixel leds = tinyNeoPixel(7, NP_PIN, NEO_GRB + NEO_KHZ800, pixels);
+tinyNeoPixel leds = tinyNeoPixel(7, NP_PIN, NEO_RGB + NEO_KHZ800, pixels);
 
 Ds1302::DateTime dt;  //sollte kostant pro loop sein und so oft genutzt das es kein unterschied macht
 
 void wdt_delay(uint32_t dt) {
-    auto start_millis = millis();
-    while (millis()-start_millis>dt) {
-      wdt_reset();
-      delay(1);
-    }
+  auto start_millis = millis();
+  while (millis() - start_millis > dt) {
+    wdt_reset();
+    delay(1);
+  }
 }
 
 void led_wr_byte(byte led_byte, uint32_t color) {
   for (uint8_t i = 0; i < 7; i++) {
-    if ((led_byte >> i) && 0x01) {
+    if ((led_byte >> i) & 0x01) {
       leds.setPixelColor(i, color);
     } else {
       leds.setPixelColor(i, 0);
@@ -63,12 +63,12 @@ uint32_t seasonal_color(uint8_t month) {  //saesionale farbe. sollte eigentlich 
   }
 }
 
-void led_run_daily_anim() {
+void led_run_daily_anim(uint8_t mon, uint8_t day) {
   //boot animation
-  switch (dt.month) {
+  switch (mon) {
     case Ds1302::MONTH_DEC:
       {
-        if (dt.day <= 25) {  //weihnachten
+        if (day <= 25) {  //weihnachten
           const char* xmas = "Merry XMAS!";
           for (uint8_t i = 0; i < strlen(xmas); i++) {
             led_wr_byte(xmas[i], leds.Color(255, 255, 255));
@@ -77,9 +77,9 @@ void led_run_daily_anim() {
           //musste ein paar mehr als die klasischen weihnachtsfarben nehemen
           uint32_t xmas_blink[] = {
             leds.Color(255, 0, 0),
-            leds.Color(255, 255, 0),
             leds.Color(128, 255, 0),
             leds.Color(255, 255, 0),
+            leds.Color(16, 255, 32),
             leds.Color(0, 0, 255),
             leds.Color(255, 255, 255),
             leds.Color(128, 0, 192)
@@ -92,7 +92,7 @@ void led_run_daily_anim() {
             xmas_blink_start %= 7;
             wdt_delay(100);
           }
-        } else if (dt.day == 31) {  //silvester
+        } else if (day == 31) {  //silvester
           for (uint8_t k = 0; k <= 5; k++) {
             for (uint8_t j = 0; j < 7; j++) {  //rakete einfliegen
               for (uint8_t i = 0; i <= j; i++) {
@@ -139,7 +139,7 @@ void led_run_daily_anim() {
 
     case Ds1302::MONTH_MAR:
       {
-        if (dt.day == 14) {  //pi day
+        if (day == 14) {  //pi day
           byte pi_b[] = { 3, 255, 1, 4 };
           for (uint8_t i = 0; i < sizeof(pi_b); i++) {
             led_wr_byte(pi_b[i], leds.Color(255, 0, 102));
@@ -151,8 +151,8 @@ void led_run_daily_anim() {
     default:
       {
         for (uint8_t i = 0; i <= 4; i++) {
-          leds.setPixelColor(i, seasonal_color(dt.month));
-          leds.setPixelColor(6 - i, seasonal_color(dt.month));
+          leds.setPixelColor(i, seasonal_color(mon));
+          leds.setPixelColor(6 - i, seasonal_color(mon));
           leds.show();
           wdt_delay(100);
         }
@@ -163,9 +163,16 @@ void led_run_daily_anim() {
 }
 
 void setup() {
-  wdt_enable(WDTO_8S); //NICHTS sollte länger als 8S hängen, wdt_delay ruft immer wdt_reset() auf
+  wdt_enable(WDTO_8S);  //NICHTS sollte länger als 8S hängen, wdt_delay ruft immer wdt_reset() auf
   pinMode(NP_PIN, OUTPUT);
+  pinMode(BTN_PIN, INPUT);
+  delay(1);
+  leds.setBrightness(65);  //eis drüber damit bei umbruch mindestends helligkeit 1 ist
+  for (uint8_t i = 0; i < 7; i++) {
+    leds.setPixelColor(i, 252 - ((i + 1) * 36), 0, (i + 1) * 36);  //rot zu blau
+  }
   leds.show();
+  wdt_delay(1000);
 
   //rtc setup
   rtc.init();
@@ -179,39 +186,43 @@ void setup() {
     dt.month = 1;
     dt.dow = 7;
     dt.day = 1;
-    dt.hour = 0;
-    dt.minute = 0;
-    dt.second = 0;
+    dt.hour = 1;
+    dt.minute = 1;
+    dt.second = 1;
     rtc.setDateTime(&dt);
     wdt_delay(1000);
   }
   rtc.getDateTime(&dt);
 
-  //led_run_daily_anim();
+  leds.show();
+  wdt_delay(1000);
+
+  led_run_daily_anim(dt.month,dt.day);
 }
 
 enum time_page_e {
   PAGE_YEAR = 0,  //rot
-  PAGE_MON,       //gruen
-  PAGE_DAY,       //blau
-  PAGE_HOUR,      //magenta
-  PAGE_MIN,       //cyan
-  PAGE_SEC        //gelb
+  PAGE_MON = 1,   //gruen
+  PAGE_DAY = 2,   //blau
+  PAGE_HOUR = 3,  //magenta
+  PAGE_MIN = 4,   //cyan
+  PAGE_SEC = 5    //gelb
 };
 uint8_t time_page = PAGE_YEAR;
 uint8_t edit_mode = 0;  //0 keine bearbeitung, 1 hinzufuegen, 2 abziehen
 
 uint8_t last_hour = 0;
-auto last_disp_change = millis();
+uint32_t last_disp_change = 0;
 void display_page() {
   if (dt.hour != last_hour) {
-    led_run_daily_anim();
+    led_run_daily_anim(dt.month,dt.day);
     last_hour = dt.hour;
   }
 
-  if (millis() > last_disp_change - 5000) {
+  if (millis() - last_disp_change > 5000) {
     if (edit_mode == 0) time_page++;
     if (time_page > PAGE_SEC) time_page = PAGE_YEAR;
+    last_disp_change = millis();
   }
 
   bool edit_blink = (edit_mode > 0) and (millis() % 1024 >= 512);
@@ -246,7 +257,7 @@ uint8_t read_button_val() {  //2 mode, 1 set, 0 keiner
 }
 
 uint8_t last_button_val = 0;
-auto last_button_millis = millis();
+uint32_t last_button_millis = 0;
 void poll_buttons() {
   uint8_t button_val = read_button_val();
 
@@ -307,7 +318,8 @@ void poll_buttons() {
             //led abzug modus
             led_clear();
             leds.setPixelColor(3, 0, 255, 0);
-            wdt_delay(250);
+            leds.show();
+            wdt_delay(1000);
             break;
 
           case 2:  //edit wechsel auf hinzu
@@ -321,14 +333,16 @@ void poll_buttons() {
               //led anzeige edit verlassen
               led_clear();
               leds.setPixelColor(3, 0, 0, 255);
-              wdt_delay(250);
+              leds.show();
+              wdt_delay(1000);
               break;
             }
 
             //led hinzuf. modus
             led_clear();
             leds.setPixelColor(3, 255, 0, 0);
-            wdt_delay(250);
+            leds.show();
+            wdt_delay(1000);
             break;
         }
 
@@ -343,4 +357,5 @@ void loop() {
   poll_buttons();
   display_page();
   wdt_reset();
+  delay(1);
 }
