@@ -85,12 +85,10 @@ void led_run_daily_anim(uint8_t mon, uint8_t day) {
             leds.Color(255, 255, 255),
             leds.Color(128, 0, 192)
           };
-          uint8_t xmas_blink_start = 0;
           for (uint8_t j = 0; j < 14; j++) {
             for (uint8_t i = 0; i < 7; i++) {
-              leds.setPixelColor(i, xmas_blink[(i + xmas_blink_start) % 7]);  //von start starten und einmal im kreis falls noetig
-            }
-            xmas_blink_start %= 7;
+              leds.setPixelColor(i, xmas_blink[(i + j) % 7]);  //von start starten und einmal im kreis falls noetig
+            };
             wdt_delay(100);
           }
         } else if (day == 31) {  //silvester
@@ -139,7 +137,8 @@ void led_run_daily_anim(uint8_t mon, uint8_t day) {
       }
       break;
 
-        case Ds1302::MONTH_MAR : {
+    case Ds1302::MONTH_MAR:
+      {
         if (day == 14) {  //pi day
           byte pi_b[] = { 3, 255, 1, 4 };
           for (uint8_t i = 0; i < sizeof(pi_b); i++) {
@@ -285,7 +284,7 @@ void poll_buttons() {
               break;
             case PAGE_HOUR:
               dt.hour += (edit_mode == 1) ? 1 : -1;
-              if (dt.hour > 23) dt.hour = 0;              
+              if (dt.hour > 23) dt.hour = 0;
               last_hour = dt.hour;
               break;
             case PAGE_MIN:
